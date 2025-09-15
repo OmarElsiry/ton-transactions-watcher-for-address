@@ -67,7 +67,7 @@ def get_balance():
 
 @app.route('/api/sync', methods=['POST'])
 def sync_transactions():
-    """Manually sync transactions from API"""
+    """Manually sync transactions from blockchain"""
     try:
         limit = request.json.get('limit', 10) if request.json else 10
         new_transactions = transaction_service.fetch_new_transactions(limit)
@@ -75,26 +75,14 @@ def sync_transactions():
         return jsonify({
             'status': 'success',
             'new_transactions': len(new_transactions),
-            'message': f'Found {len(new_transactions)} new transactions'
+            'message': f'Found {len(new_transactions)} new transactions',
+            'transactions': [tx.to_dict() for tx in new_transactions]
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def periodic_sync():
-    """Periodically sync transactions"""
-    while True:
-        try:
-            time.sleep(Config.POLLING_INTERVAL)
-            new_transactions = transaction_service.fetch_new_transactions(5)
-            
-            if new_transactions:
-                print(f"Found {len(new_transactions)} new transactions")
-                for tx in new_transactions:
-                    print(f"  - {tx.amount_ton} TON from {tx.short_sender}")
-                            
-        except Exception as e:
-            print(f"Periodic sync error: {e}")
+# Removed automatic periodic sync - now manual only
 
 # Simple dashboard HTML template (no WebSocket)
 DASHBOARD_HTML = '''
@@ -114,7 +102,7 @@ DASHBOARD_HTML = '''
             <h1>TON Wallet Monitor</h1>
             <div class="api-info">
                 <strong>✅ Using Free API</strong> - No API keys required! 
-                <br>API: ''' + Config.API_TYPE.title() + ''' (free) | Auto-refresh every 30s
+                <br>API: ''' + Config.API_TYPE.title() + ''' (free) | Manual requests only
             </div>
             <p>Monitoring: <code>''' + Config.MONITORED_WALLET + '''</code></p>
             <div class="controls">
@@ -302,10 +290,10 @@ DASHBOARD_HTML = '''
         // Initial load
         refreshAll();
         
-        // Auto-refresh every 30 seconds
-        autoRefreshInterval = setInterval(() => {
-            refreshAll();
-        }, 30000);
+        // No auto-refresh - manual only
+        // autoRefreshInterval = setInterval(() => {
+        //     refreshAll();
+        // }, 30000);
         
         // Show initial status
         showNotification('🚀 TON Monitor loaded - No API keys needed!');
@@ -318,16 +306,14 @@ if __name__ == '__main__':
     # Validate configuration
     Config.validate_config()
     
-    # Start periodic sync in background
-    sync_thread = threading.Thread(target=periodic_sync, daemon=True)
-    sync_thread.start()
+    # No automatic background sync - manual requests only
     
-    print(f"🚀 Starting Simple TON Wallet Monitor")
+    print(f"🚀 Starting Manual TON Wallet Monitor")
     print(f"📡 API: {Config.API_TYPE.title()} (Free - No API key required)")
     print(f"👀 Monitoring: {Config.MONITORED_WALLET}")
-    print(f"⏱️  Polling every {Config.POLLING_INTERVAL} seconds")
+    print(f"🔄 Manual requests only - No automatic polling")
     print(f"🌐 Dashboard: http://{Config.FLASK_HOST}:{Config.FLASK_PORT}")
-    print(f"💡 No WebSocket - Simple polling only")
+    print(f"💡 Call /api/sync to fetch new transactions")
     
     # Run the Flask app
     app.run(

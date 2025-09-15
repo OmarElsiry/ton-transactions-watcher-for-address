@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  ton-monitor:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - MONITORED_WALLET=UQDrY5iulWs_MyWTP9JSGedWBzlbeRmhCBoqsSaNiSLOs315
+      - API_TYPE=toncenter
+      - POLLING_INTERVAL=10
+      - FLASK_PORT=8080
+      - FLASK_HOST=0.0.0.0
+      - MIN_AMOUNT_TON=0.01
+      - CORS_ORIGINS=https://yourwebsite.com
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

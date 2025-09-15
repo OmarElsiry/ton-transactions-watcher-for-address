@@ -47,10 +47,15 @@ def health_check():
 def get_transactions():
     """Get transactions with optional filters - External API"""
     try:
+        # Auto-sync: Fetch new transactions from blockchain first
+        sync_limit = 50  # Fetch up to 50 new transactions
+        new_transactions = transaction_service.fetch_new_transactions(sync_limit)
+        
         # Get query parameters
         limit = request.args.get('limit', 10, type=int)
         limit = min(limit, 1000)  # Cap at 1000 for performance
         
+        # Handle time-based filters
         filters = {
             'min_amount': request.args.get('min_amount', type=float),
             'max_amount': request.args.get('max_amount', type=float),
@@ -58,6 +63,25 @@ def get_transactions():
             'from_date': request.args.get('from_date'),
             'to_date': request.args.get('to_date')
         }
+        
+        # Convert time-based parameters to from_date/to_date
+        now = datetime.now()
+        
+        if request.args.get('minutes_ago'):
+            minutes_ago = int(request.args.get('minutes_ago'))
+            filters['from_date'] = (now - timedelta(minutes=minutes_ago)).strftime('%Y-%m-%d %H:%M:%S')
+            
+        elif request.args.get('hours_ago'):
+            hours_ago = int(request.args.get('hours_ago'))
+            filters['from_date'] = (now - timedelta(hours=hours_ago)).strftime('%Y-%m-%d %H:%M:%S')
+            
+        elif request.args.get('days_ago'):
+            days_ago = int(request.args.get('days_ago'))
+            filters['from_date'] = (now - timedelta(days=days_ago)).strftime('%Y-%m-%d %H:%M:%S')
+            
+        elif request.args.get('weeks_ago'):
+            weeks_ago = int(request.args.get('weeks_ago'))
+            filters['from_date'] = (now - timedelta(weeks=weeks_ago)).strftime('%Y-%m-%d %H:%M:%S')
         
         # Clean filters
         clean_filters = ValidationHelper.sanitize_filters(filters)
@@ -74,6 +98,7 @@ def get_transactions():
             'success': True,
             'count': len(transactions),
             'transactions': [tx.to_dict() for tx in transactions],
+            'new_transactions_found': len(new_transactions),
             'timestamp': datetime.now().isoformat()
         })
         

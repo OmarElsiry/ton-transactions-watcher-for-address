@@ -109,7 +109,11 @@ class TransactionDB:
             if from_date:
                 try:
                     from datetime import datetime
-                    from_timestamp = int(datetime.strptime(from_date, '%Y-%m-%d').timestamp())
+                    # Try full datetime format first, then date-only format
+                    try:
+                        from_timestamp = int(datetime.strptime(from_date, '%Y-%m-%d %H:%M:%S').timestamp())
+                    except ValueError:
+                        from_timestamp = int(datetime.strptime(from_date, '%Y-%m-%d').timestamp())
                     query += " AND timestamp >= ?"
                     params.append(from_timestamp)
                 except ValueError:
@@ -118,7 +122,11 @@ class TransactionDB:
             if to_date:
                 try:
                     from datetime import datetime
-                    to_timestamp = int(datetime.strptime(to_date, '%Y-%m-%d').timestamp()) + 86400  # End of day
+                    # Try full datetime format first, then date-only format
+                    try:
+                        to_timestamp = int(datetime.strptime(to_date, '%Y-%m-%d %H:%M:%S').timestamp())
+                    except ValueError:
+                        to_timestamp = int(datetime.strptime(to_date, '%Y-%m-%d').timestamp()) + 86400  # End of day
                     query += " AND timestamp <= ?"
                     params.append(to_timestamp)
                 except ValueError:

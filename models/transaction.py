@@ -49,7 +49,6 @@ class Transaction:
             'confirmed': self.confirmed,
             'processed': self.processed,
             'formatted_time': self.formatted_time,
-            'short_hash': self.short_hash,
             'short_sender': self.short_sender
         }
     

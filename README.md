@@ -1,36 +1,36 @@
 # TON Wallet Monitor Service
 
-A production-ready backend service to monitor TON wallet transactions and provide real-time notifications to your applications. This service uses free TON APIs with native TON validation to ensure you only receive genuine TON coin transfers, not fake tokens.
+A production-ready backend service to monitor TON wallet transactions with **manual control** and comprehensive API integration. This service uses free TON APIs with advanced native TON validation to ensure you only receive genuine TON coin transfers, not fake tokens.
 
 ## 🚀 Key Features
 
-- 🔔 **Real-time Monitoring**: Automatic blockchain polling every 10 seconds
-- 🛡️ **Native TON Validation**: Filters out fake tokens and jettons - only genuine TON coins
-- 💾 **Transaction Storage**: SQLite database with full transaction history
-- 🌐 **REST API**: Clean API endpoints for external integration
-- 🔧 **No API Keys Required**: Uses free TonCenter API
-- ⚙️ **Production Ready**: Designed for remote server deployment
-- 📊 **Balance Tracking**: Real-time wallet balance monitoring
-- 🔒 **Secure**: Input validation and error handling
+- 🎯 **Manual Control**: No automatic polling - full user control over sync timing
+- 🛡️ **Native TON Validation**: Advanced multi-layer filtering blocks fake tokens and jettons
+- 💾 **Transaction Storage**: SQLite database with complete transaction history
+- 🌐 **Enhanced REST API**: Rich endpoints with full transaction data responses
+- 🔧 **No API Keys Required**: Uses free TonCenter API with fallback support
+- ⚙️ **Production Ready**: Clean architecture designed for scalable deployment
+- 📊 **Real-time Data**: Manual sync returns complete transaction details
+- 🔒 **Security First**: Multi-layer validation with opcode detection and pattern matching
 
 ## 🎯 Business Value
 
 This service provides:
-- **Payment Processing**: Automatically detect TON payments to your wallet
-- **Real-time Notifications**: Instant alerts when payments are received
-- **Transaction Validation**: Ensures only genuine TON coins are processed
-- **API Integration**: Easy integration with any application or website
-- **Scalable Architecture**: Clean code structure for easy maintenance and updates
+- **Manual Payment Processing**: On-demand detection of TON payments with full control
+- **Complete Transaction Data**: Rich API responses with all transaction details
+- **Advanced Security**: Multi-layer validation ensures only genuine TON coins are processed
+- **Flexible Integration**: Manual sync API perfect for any application or website
+- **Clean Architecture**: Modular design with reusable components for easy maintenance
 
-## 🛡️ Native TON Validation
+## 🛡️ Advanced Native TON Validation
 
-The service includes advanced validation to ensure you only receive **genuine TON coins**:
+The service includes comprehensive multi-layer validation to ensure you only receive **genuine TON coins**:
 
-- **Jetton Detection**: Automatically filters out fake tokens and jettons
-- **Opcode Validation**: Checks transaction opcodes to identify token transfers
-- **Message Analysis**: Analyzes transaction messages for token patterns
-- **Value Verification**: Ensures transactions have actual TON value
-- **Pattern Matching**: Detects common fake token signatures
+- **Opcode Detection**: Identifies and blocks jetton transfer opcodes (0x0f8a7ea5, 0x178d4519, 0x7362d09c, 0x595f07bc)
+- **Message Pattern Analysis**: Scans transaction messages for token transfer patterns
+- **Value Verification**: Ensures transactions contain actual TON value, not zero-value token transfers
+- **Conservative Filtering**: Fail-safe approach blocks suspicious transactions to prevent false positives
+- **Multi-Layer Protection**: Validation occurs at both API client and transaction model levels
 
 ## 🚀 Quick Start (Local Development)
 
@@ -58,8 +58,10 @@ vim .env
 
 ```bash
 # Start the monitoring service
-python app_simple.py
+python app.py
 ```
+
+The service will start in **manual-only mode** - no automatic polling occurs. Use the API endpoints to manually sync and retrieve transactions.
 ## 🌐 Production Deployment
 
 ### Remote Server Setup
@@ -113,7 +115,7 @@ MONITORED_WALLET=UQDrY5iulWs_MyWTP9JSGedWBzlbeRmhCBoqsSaNiSLOs315
 
 # API Configuration (no keys required)
 API_TYPE=toncenter
-POLLING_INTERVAL=10
+# POLLING_INTERVAL removed - manual sync only
 
 # Server Configuration
 FLASK_PORT=8080
@@ -141,7 +143,7 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/opt/ton-monitor
 Environment=PATH=/opt/ton-monitor/venv/bin
-ExecStart=/opt/ton-monitor/venv/bin/python app_simple.py
+ExecStart=/opt/ton-monitor/venv/bin/python app.py
 Restart=always
 RestartSec=10
 
@@ -191,7 +193,7 @@ sudo systemctl reload nginx
 # Core Settings
 MONITORED_WALLET=your_ton_wallet_address
 API_TYPE=toncenter                    # or 'tonapi'
-POLLING_INTERVAL=10                   # seconds between blockchain checks
+# POLLING_INTERVAL removed - manual sync only
 MIN_AMOUNT_TON=0.01                   # minimum TON amount to process
 
 # Server Settings
@@ -259,7 +261,7 @@ Response:
 }
 ```
 
-#### Manual Sync
+#### Manual Sync (Enhanced)
 ```bash
 POST http://your-server.com:8080/api/sync
 Content-Type: application/json
@@ -267,25 +269,52 @@ Content-Type: application/json
 {"limit": 10}
 ```
 
+Response:
+```json
+{
+  "status": "success",
+  "new_transactions": 3,
+  "message": "Found 3 new transactions",
+  "transactions": [
+    {
+      "tx_hash": "HtD71OYE0F2JjKd2Flgv...",
+      "amount_ton": 0.1,
+      "sender_address": "EQAOvLwrhnaqkW_e1Qu8...",
+      "formatted_time": "2025-09-15 01:00:14",
+      "message": "te6cckEBAQEAAgAAAEysuc0="
+    }
+  ]
+}
+```
+
 ### Integration Examples
 
 #### PHP Integration
 ```php
 <?php
-// Check for new transactions
-$response = file_get_contents('http://your-server.com:8080/api/transactions?limit=5');
-$transactions = json_decode($response, true);
+// Manual sync to get new transactions with full data
+$syncData = json_encode(['limit' => 10]);
+$context = stream_context_create([
+    'http' => [
+        'method' => 'POST',
+        'header' => 'Content-Type: application/json',
+        'content' => $syncData
+    ]
+]);
 
-foreach ($transactions as $tx) {
-    if (!$tx['processed']) {
-        // Process new transaction
+$response = file_get_contents('http://your-server.com:8080/api/sync', false, $context);
+$result = json_decode($response, true);
+
+if ($result['status'] === 'success') {
+    foreach ($result['transactions'] as $tx) {
+        // Process each new transaction
         processPayment($tx['sender_address'], $tx['amount_ton'], $tx['tx_hash']);
     }
 }
 
 function processPayment($from, $amount, $txHash) {
     // Your payment processing logic
-    echo "Received {$amount} TON from {$from}";
+    echo "Received {$amount} TON from {$from} (Hash: {$txHash})";
 }
 ?>
 ```
@@ -299,13 +328,13 @@ class TONMonitorClient {
         this.serverUrl = serverUrl;
     }
     
-    async getNewTransactions() {
+    async syncTransactions(limit = 10) {
         try {
-            const response = await axios.get(`${this.serverUrl}/api/transactions?limit=10`);
+            const response = await axios.post(`${this.serverUrl}/api/sync`, { limit });
             return response.data;
         } catch (error) {
-            console.error('Error fetching transactions:', error);
-            return [];
+            console.error('Error syncing transactions:', error);
+            return { status: 'error', transactions: [] };
         }
     }
     
@@ -320,13 +349,14 @@ class TONMonitorClient {
     }
     
     async processNewPayments() {
-        const transactions = await this.getNewTransactions();
+        const result = await this.syncTransactions();
         
-        for (const tx of transactions) {
-            if (!tx.processed) {
+        if (result.status === 'success') {
+            for (const tx of result.transactions) {
                 console.log(`New payment: ${tx.amount_ton} TON from ${tx.sender_address}`);
+                console.log(`Transaction hash: ${tx.tx_hash}`);
+                console.log(`Time: ${tx.formatted_time}`);
                 // Process payment logic here
-                await this.markAsProcessed(tx.tx_hash);
             }
         }
     }
@@ -346,14 +376,14 @@ class TONMonitorClient:
     def __init__(self, server_url):
         self.server_url = server_url
     
-    def get_transactions(self, limit=10):
+    def sync_transactions(self, limit=10):
         try:
-            response = requests.get(f"{self.server_url}/api/transactions", 
-                                  params={'limit': limit})
+            response = requests.post(f"{self.server_url}/api/sync", 
+                                   json={'limit': limit})
             return response.json()
         except Exception as e:
             print(f"Error: {e}")
-            return []
+            return {'status': 'error', 'transactions': []}
     
     def get_balance(self):
         try:
@@ -364,10 +394,12 @@ class TONMonitorClient:
             return 0
     
     def process_payments(self):
-        transactions = self.get_transactions()
-        for tx in transactions:
-            if not tx.get('processed'):
+        result = self.sync_transactions()
+        if result['status'] == 'success':
+            for tx in result['transactions']:
                 print(f"New payment: {tx['amount_ton']} TON from {tx['sender_address']}")
+                print(f"Transaction hash: {tx['tx_hash']}")
+                print(f"Time: {tx['formatted_time']}")
                 # Your payment processing logic here
                 self.credit_user_account(tx['sender_address'], tx['amount_ton'])
 
@@ -489,7 +521,7 @@ sudo systemctl status ton-monitor
 sudo journalctl -u ton-monitor -f
 
 # Check resource usage
-top -p $(pgrep -f "python app_simple.py")
+top -p $(pgrep -f "python app.py")
 ```
 
 #### Log Rotation
@@ -580,7 +612,7 @@ RUN pip install -r requirements.txt
 COPY . .
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["python", "app_api.py"]
 ```
 
 ### Systemd Service
@@ -594,7 +626,7 @@ After=network.target
 Type=simple
 User=tonmonitor
 WorkingDirectory=/opt/ton-monitor
-ExecStart=/usr/bin/python3 app.py
+ExecStart=/usr/bin/python3 app_api.py
 Restart=always
 
 [Install]

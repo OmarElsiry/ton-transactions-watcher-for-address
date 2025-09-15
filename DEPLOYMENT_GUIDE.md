@@ -1,14 +1,14 @@
-# TON Wallet Monitor - Simple Deployment Guide
+# TON Wallet Monitor - Manual Control Deployment Guide
 
-A simple backend service to monitor TON wallet transactions with filtering and API access. **No API keys required** - uses free blockchain APIs.
+A production-ready backend service to monitor TON wallet transactions with **manual control** and comprehensive API integration. **No API keys required** - uses free blockchain APIs.
 
 ## 🚀 What This Service Does
 
-- **Monitors your TON wallet** for incoming transactions (genuine TON coins only)
-- **Provides REST API** for your websites/applications to check for payments
-- **Filters fake tokens** - only processes real TON cryptocurrency
-- **Stores transaction history** with filtering by amount, date, sender address
-- **Works remotely** - deploy on any server and access from anywhere
+- **Manual TON wallet monitoring** - full user control over sync timing
+- **Enhanced REST API** with complete transaction data responses
+- **Advanced security filtering** - blocks fake tokens and jettons with multi-layer validation
+- **Rich transaction storage** with comprehensive filtering by amount, date, sender address
+- **Remote deployment ready** - deploy on any server and access from anywhere
 
 ## 📋 Quick Installation
 
@@ -31,7 +31,7 @@ mkdir ton-monitor
 cd ton-monitor
 
 # Copy all project files to this directory
-# (app_simple.py, config.py, database.py, services/, models/, .env)
+# (app.py, config.py, database.py, services/, models/, components/, utils/, .env)
 
 # Edit configuration
 cp .env.example .env
@@ -44,7 +44,7 @@ Edit `.env` file:
 ```env
 MONITORED_WALLET=UQDrY5iulWs_MyWTP9JSGedWBzlbeRmhCBoqsSaNiSLOs315
 API_TYPE=toncenter
-POLLING_INTERVAL=10
+# POLLING_INTERVAL removed - manual sync only
 MIN_AMOUNT_TON=0.01
 FLASK_PORT=8080
 FLASK_HOST=0.0.0.0
@@ -53,12 +53,13 @@ FLASK_HOST=0.0.0.0
 ### 4. Run the Service
 
 ```bash
-# Start monitoring
-python app_simple.py
+# Start the manual monitoring service
+python app.py
 
 # Service will start on http://localhost:8080
 # Dashboard: http://localhost:8080
 # API: http://localhost:8080/api/transactions
+# Manual Sync: POST http://localhost:8080/api/sync
 ```
 
 ## 🌐 Remote Server Deployment
@@ -122,7 +123,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/ton-monitor
-ExecStart=/usr/bin/python3 app_simple.py
+ExecStart=/usr/bin/python3 app.py
 Restart=always
 RestartSec=10
 
@@ -201,21 +202,29 @@ GET http://your-server-ip:8080/api/balance
 
 ### Integration Examples
 
-**PHP Example:**
+**PHP Example (Manual Sync):**
 ```php
 <?php
 $server_url = "http://203.0.113.45:8080";  // Your server IP
 
-// Check for new payments over 1 TON
-$url = "$server_url/api/transactions?min_amount=1.0&limit=10";
-$response = file_get_contents($url);
-$transactions = json_decode($response, true);
+// Manual sync to get new transactions
+$syncData = json_encode(['limit' => 10]);
+$context = stream_context_create([
+    'http' => [
+        'method' => 'POST',
+        'header' => 'Content-Type: application/json',
+        'content' => $syncData
+    ]
+]);
 
-foreach ($transactions as $tx) {
-    echo "Payment: {$tx['amount_ton']} TON from {$tx['sender_address']}\n";
-    
-    // Process payment in your system
-    processPayment($tx['sender_address'], $tx['amount_ton'], $tx['tx_hash']);
+$response = file_get_contents("$server_url/api/sync", false, $context);
+$result = json_decode($response, true);
+
+if ($result['status'] === 'success') {
+    foreach ($result['transactions'] as $tx) {
+        echo "New payment: {$tx['amount_ton']} TON from {$tx['sender_address']}\n";
+        processPayment($tx['sender_address'], $tx['amount_ton'], $tx['tx_hash']);
+    }
 }
 
 function processPayment($from, $amount, $txHash) {
@@ -225,24 +234,29 @@ function processPayment($from, $amount, $txHash) {
 ?>
 ```
 
-**JavaScript Example:**
+**JavaScript Example (Manual Sync):**
 ```javascript
 const SERVER_URL = "http://203.0.113.45:8080";  // Your server IP
 
-async function checkForPayments() {
+async function syncAndProcessPayments() {
     try {
-        // Check for payments over 0.5 TON
-        const response = await fetch(`${SERVER_URL}/api/transactions?min_amount=0.5`);
-        const transactions = await response.json();
-        
-        transactions.forEach(tx => {
-            console.log(`Payment: ${tx.amount_ton} TON from ${tx.sender_address}`);
-            
-            // Process payment
-            processPayment(tx);
+        // Manual sync to get new transactions
+        const response = await fetch(`${SERVER_URL}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 10 })
         });
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            result.transactions.forEach(tx => {
+                console.log(`New payment: ${tx.amount_ton} TON from ${tx.sender_address}`);
+                console.log(`Transaction hash: ${tx.tx_hash}`);
+                processPayment(tx);
+            });
+        }
     } catch (error) {
-        console.error('Error checking payments:', error);
+        console.error('Error syncing payments:', error);
     }
 }
 
@@ -251,29 +265,30 @@ function processPayment(transaction) {
     // Update UI, credit user account, etc.
 }
 
-// Check every 30 seconds
-setInterval(checkForPayments, 30000);
+// Manual sync every 30 seconds
+setInterval(syncAndProcessPayments, 30000);
 ```
 
-**Python Example:**
+**Python Example (Manual Sync):**
 ```python
 import requests
 import time
 
 SERVER_URL = "http://203.0.113.45:8080"  # Your server IP
 
-def check_payments():
+def sync_and_process_payments():
     try:
-        # Get transactions over 0.1 TON
-        response = requests.get(f"{SERVER_URL}/api/transactions", 
-                              params={'min_amount': 0.1, 'limit': 20})
-        transactions = response.json()
+        # Manual sync to get new transactions
+        response = requests.post(f"{SERVER_URL}/api/sync", 
+                               json={'limit': 10})
+        result = response.json()
         
-        for tx in transactions:
-            print(f"Payment: {tx['amount_ton']} TON from {tx['sender_address']}")
-            
-            # Process payment
-            process_payment(tx)
+        if result['status'] == 'success':
+            for tx in result['transactions']:
+                print(f"New payment: {tx['amount_ton']} TON from {tx['sender_address']}")
+                print(f"Transaction hash: {tx['tx_hash']}")
+                print(f"Time: {tx['formatted_time']}")
+                process_payment(tx)
             
     except Exception as e:
         print(f"Error: {e}")
@@ -282,9 +297,9 @@ def process_payment(transaction):
     # Your payment processing logic
     pass
 
-# Check every 30 seconds
+# Manual sync every 30 seconds
 while True:
-    check_payments()
+    sync_and_process_payments()
     time.sleep(30)
 ```
 

@@ -118,3 +118,30 @@ class TransactionService:
         except Exception as e:
             print(f"Error getting account info: {e}")
             return None
+    
+    def get_wallet_balance(self) -> dict:
+        """Get wallet balance information"""
+        try:
+            account_info = self.api_client.get_account_info(self.monitored_wallet)
+            if account_info and 'balance' in account_info:
+                balance_nanotons = int(account_info['balance'])
+                balance_ton = balance_nanotons / 1_000_000_000  # Convert nanotons to TON
+                return {
+                    'balance_ton': balance_ton,
+                    'balance_nanotons': balance_nanotons,
+                    'status': account_info.get('state', 'unknown')
+                }
+            else:
+                return {
+                    'balance_ton': 0,
+                    'balance_nanotons': 0,
+                    'status': 'unknown'
+                }
+        except Exception as e:
+            print(f"Error getting wallet balance: {e}")
+            return {
+                'balance_ton': 0,
+                'balance_nanotons': 0,
+                'status': 'error',
+                'error': str(e)
+            }

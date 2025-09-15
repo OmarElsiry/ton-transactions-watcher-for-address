@@ -205,34 +205,55 @@ GET /api/stats
 
 ### POST /api/sync
 
-Manually trigger blockchain synchronization to fetch new transactions.
+Manually trigger blockchain synchronization to fetch new transactions. **Enhanced response includes complete transaction data.**
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 10 | Number of recent transactions to fetch |
+| `limit` | integer | No | 10 | Maximum number of transactions to fetch |
 
-**Example Request:**
+**Request Body:**
 
-```bash
-POST /api/sync
-Content-Type: application/json
-
+```json
 {
   "limit": 20
 }
 ```
 
-**Response Format:**
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:8080/api/sync \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 20}'
+```
+
+**Enhanced Response Format:**
 
 ```json
 {
   "status": "success",
   "new_transactions": 3,
   "message": "Found 3 new transactions",
-  "sync_timestamp": 1704067200,
-  "total_processed": 20
+  "transactions": [
+    {
+      "tx_hash": "HtD71OYE0F2JjKd2FlgvFSt4WdAeMbw=",
+      "account_id": "UQDrY5iulWs_MyWTP9JSGedWBzlbeRmhCBoqsSaNiSLOs315",
+      "sender_address": "EQAOvLwrhnaqkW_e1Qu8oZc3XnIOx9Qzk07JSGedWBzlbeR",
+      "sender_name": null,
+      "amount_ton": 0.1,
+      "amount_nanoton": 100000000,
+      "message": "te6cckEBAQEAAgAAAEysuc0=",
+      "timestamp": 1757884827,
+      "formatted_time": "2025-09-15 01:00:14",
+      "short_hash": "HtD71OYE0F...",
+      "short_sender": "EQAOvLwrhn...",
+      "block_number": null,
+      "confirmed": true,
+      "processed": false
+    }
+  ],
 }
 ```
 
@@ -243,8 +264,7 @@ Content-Type: application/json
 | `status` | string | Operation status (success/error) |
 | `new_transactions` | integer | Number of new transactions found |
 | `message` | string | Human-readable status message |
-| `sync_timestamp` | integer | Sync operation timestamp |
-| `total_processed` | integer | Total transactions processed |
+| `transactions` | array | Complete transaction objects with all details |
 
 ---
 

@@ -259,9 +259,16 @@ def get_wallet_info():
 # ============================================================================
 
 @app.route('/')
-def index():
-    """Main dashboard page"""
-    return render_template_string(DASHBOARD_HTML)
+def dashboard():
+    """Main dashboard interface"""
+    return UIComponents.render_dashboard()
+
+@app.route('/example')
+def example():
+    """Serve the frontend example page"""
+    with open('frontend_example.html', 'r', encoding='utf-8') as f:
+        return f.read()
+
 
 # Dashboard HTML template (simplified)
 DASHBOARD_HTML = '''

@@ -12,7 +12,7 @@ class Config:
     POLLING_INTERVAL = int(os.getenv('POLLING_INTERVAL', 10))  # seconds
     
     # Flask Configuration
-    FLASK_PORT = int(os.getenv('FLASK_PORT', 8080))
+    FLASK_PORT = int(os.getenv('FLASK_PORT', 5001))
     FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
     SECRET_KEY = os.getenv('SECRET_KEY', 'ton-monitor-secret-2024')
     
@@ -23,7 +23,7 @@ class Config:
     MIN_AMOUNT_TON = float(os.getenv('MIN_AMOUNT_TON', 0.01))
     
     # CORS Configuration
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:8080').split(',')
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5001').split(',')
     
     @classmethod
     def validate_config(cls):

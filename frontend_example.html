@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TON Wallet Monitor - API Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .endpoint {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .endpoint h3 {
+            color: #0066cc;
+            margin-top: 0;
+        }
+        .url {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+        .info { border-left: 4px solid #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 TON Wallet Monitor - API Integration Example</h1>
+        <p>This page demonstrates how to use the TON Wallet Monitor API endpoints from your website.</p>
+        
+        <div class="endpoint">
+            <h3>📊 Get Wallet Balance</h3>
+            <div class="url">GET http://localhost:8080/api/balance</div>
+            <button onclick="getBalance()">Test Balance API</button>
+            <div id="balanceResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="endpoint">
+            <h3>💸 Get Recent Transactions</h3>
+            <div class="url">GET http://localhost:8080/api/transactions?limit=5</div>
+            <button onclick="getTransactions()">Test Transactions API</button>
+            <div id="transactionsResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="endpoint">
+            <h3>🔄 Manual Sync (Fetch New Transactions)</h3>
+            <div class="url">POST http://localhost:8080/api/sync</div>
+            <button onclick="syncTransactions()">Test Manual Sync</button>
+            <div id="syncResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="endpoint">
+            <h3>📈 Get Statistics</h3>
+            <div class="url">GET http://localhost:8080/api/stats</div>
+            <button onclick="getStats()">Test Stats API</button>
+            <div id="statsResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="endpoint">
+            <h3>❤️ Health Check</h3>
+            <div class="url">GET http://localhost:8080/api/health</div>
+            <button onclick="healthCheck()">Test Health Check</button>
+            <div id="healthResponse" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="endpoint info">
+            <h3>💡 Integration Tips</h3>
+            <ul>
+                <li><strong>CORS Enabled:</strong> You can call these APIs from any website</li>
+                <li><strong>No Authentication:</strong> All endpoints are public (add security for production)</li>
+                <li><strong>Manual Control:</strong> Use the sync endpoint to fetch new transactions on demand</li>
+                <li><strong>Real-time Updates:</strong> Call sync every 10-30 seconds for live monitoring</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+
+        async function makeRequest(url, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: data
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+
+        function displayResponse(elementId, result) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            
+            if (result.success) {
+                element.className = 'response success';
+                element.textContent = JSON.stringify(result.data, null, 2);
+            } else {
+                element.className = 'response error';
+                element.textContent = `Error: ${result.error || 'Request failed'}`;
+            }
+        }
+
+        async function getBalance() {
+            const result = await makeRequest(`${API_BASE}/api/balance`);
+            displayResponse('balanceResponse', result);
+        }
+
+        async function getTransactions() {
+            const result = await makeRequest(`${API_BASE}/api/transactions?limit=5`);
+            displayResponse('transactionsResponse', result);
+        }
+
+        async function syncTransactions() {
+            const result = await makeRequest(`${API_BASE}/api/sync`, 'POST', { limit: 10 });
+            displayResponse('syncResponse', result);
+        }
+
+        async function getStats() {
+            const result = await makeRequest(`${API_BASE}/api/stats`);
+            displayResponse('statsResponse', result);
+        }
+
+        async function healthCheck() {
+            const result = await makeRequest(`${API_BASE}/api/health`);
+            displayResponse('healthResponse', result);
+        }
+
+        // Auto-refresh example (uncomment to enable)
+        // setInterval(() => {
+        //     console.log('Auto-syncing transactions...');
+        //     syncTransactions();
+        // }, 30000); // Every 30 seconds
+    </script>
+</body>
+</html>

@@ -2,13 +2,15 @@
 
 ## Overview
 
-This API allows external websites and applications to integrate with the TON Wallet Monitor backend to verify transactions, check balances, and retrieve transaction data for a monitored TON wallet.
+This API allows external websites and applications to integrate with the TON Wallet Monitor backend with **manual control** to verify transactions, check balances, and retrieve transaction data for a monitored TON wallet.
 
 **Base URL:** `http://localhost:8080` (or your deployed URL)
 
 **CORS:** Enabled for all origins - supports cross-origin requests from web browsers
 
 **Authentication:** None required (public API)
+
+**Operation Mode:** Manual sync only - no automatic polling
 
 ## Response Format
 

@@ -25,6 +25,11 @@ class Transaction:
         return FormatHelper.format_timestamp(self.timestamp)
     
     @property
+    def tx_hash(self) -> str:
+        """Alias for hash to maintain compatibility"""
+        return self.hash
+    
+    @property
     def short_hash(self) -> str:
         """Get shortened hash for display"""
         return FormatHelper.format_hash(self.hash, 10)
@@ -35,34 +40,35 @@ class Transaction:
         return FormatHelper.format_address(self.sender_address, 10)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for API responses"""
+        """Convert to dictionary for API responses - raw data as is"""
         return {
             'tx_hash': self.hash,
+            'hash': self.hash,
             'account_id': self.account_id,
             'sender_address': self.sender_address,
             'sender_name': self.sender_name,
             'amount_ton': self.amount_ton,
             'amount_nanoton': self.amount_nanoton,
             'message': self.message,
+            'memo': self.message,  # memo alias for message
             'timestamp': self.timestamp,
             'block_number': self.block_number,
             'confirmed': self.confirmed,
             'processed': self.processed,
-            'formatted_time': self.formatted_time,
-            'short_sender': self.short_sender
+            'raw_data': self.raw_data
         }
     
     def to_notification(self) -> Dict[str, Any]:
-        """Convert to notification format"""
+        """Convert to notification format - raw data as is"""
         return {
             'type': 'transaction',
             'hash': self.hash,
-            'from': self.sender_address,
+            'wallet_address': self.sender_address,
             'amount': self.amount_ton,
             'message': self.message,
+            'memo': self.message,
             'timestamp': self.timestamp,
-            'confirmed': self.confirmed,
-            'formatted_time': self.formatted_time
+            'confirmed': self.confirmed
         }
     
     @classmethod

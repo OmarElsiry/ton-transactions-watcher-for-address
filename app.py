@@ -3,17 +3,17 @@
 TON Wallet Monitor - API Backend for External Integration
 Optimized Flask application with enhanced CORS support and API endpoints
 """
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import threading
-import time
-import os
+import json
 from datetime import datetime, timedelta
 
 from config import Config
 from services.transaction_service import TransactionService
-from components.ui_components import UIComponents
 from utils.helpers import ValidationHelper
+from deposit_monitor import DepositMonitor
+from realtime_deposit_notifier import realtime_notifier, DepositEvent
+from database import TransactionDB
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -28,6 +28,11 @@ CORS(app,
 
 # Initialize services
 transaction_service = TransactionService(api_type=Config.API_TYPE)
+deposit_monitor = DepositMonitor(check_interval=30)
+db = TransactionDB()
+
+# Configure Flask templates
+app.template_folder = 'templates'
 
 # ============================================================================
 # API ENDPOINTS FOR EXTERNAL INTEGRATION
@@ -279,215 +284,484 @@ def get_wallet_info():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/api/monitor/start', methods=['POST'])
+def start_deposit_monitor():
+    """Start the deposit monitor - External API"""
+    try:
+        if deposit_monitor.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Monitor is already running',
+                'status': deposit_monitor.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        deposit_monitor.start_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Deposit monitor started successfully',
+            'status': deposit_monitor.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/monitor/stop', methods=['POST'])
+def stop_deposit_monitor():
+    """Stop the deposit monitor - External API"""
+    try:
+        if not deposit_monitor.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Monitor is not running',
+                'status': deposit_monitor.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        deposit_monitor.stop_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Deposit monitor stopped successfully',
+            'status': deposit_monitor.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/monitor/status')
+def get_monitor_status():
+    """Get deposit monitor status - External API"""
+    try:
+        return jsonify({
+            'success': True,
+            'status': deposit_monitor.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/deposits/recent')
+def get_recent_deposits():
+    """Get recent deposits in JSON format - External API"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        limit = min(limit, 100)  # Cap at 100
+        
+        # Get recent transactions (deposits only)
+        transactions = transaction_service.get_recent_transactions(limit)
+        
+        # Format as deposit JSON objects
+        deposits = []
+        for tx in transactions:
+            if tx.sender_address and tx.sender_address != Config.MONITORED_WALLET:
+                deposit_data = {
+                    "wallet_address": tx.sender_address,
+                    "hash": tx.tx_hash,
+                    "timestamp": tx.timestamp,
+                    "amount": float(tx.amount_ton)
+                }
+                deposits.append(deposit_data)
+        
+        return jsonify({
+            'success': True,
+            'count': len(deposits),
+            'deposits': deposits,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/deposits/realtime/start', methods=['POST'])
+def start_realtime_deposits():
+    """Start real-time deposit monitoring - External API"""
+    try:
+        if realtime_notifier.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Real-time monitor is already running',
+                'status': realtime_notifier.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        realtime_notifier.start_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Real-time deposit monitoring started',
+            'status': realtime_notifier.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/deposits/realtime/stop', methods=['POST'])
+def stop_realtime_deposits():
+    """Stop real-time deposit monitoring - External API"""
+    try:
+        if not realtime_notifier.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Real-time monitor is not running',
+                'status': realtime_notifier.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        realtime_notifier.stop_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Real-time deposit monitoring stopped',
+            'status': realtime_notifier.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/deposits/realtime/next')
+def get_next_deposit():
+    """Get the next real-time deposit (blocking) - External API"""
+    try:
+        timeout = request.args.get('timeout', 30, type=int)  # Default 30 seconds timeout
+        timeout = min(timeout, 300)  # Max 5 minutes
+        
+        if not realtime_notifier.is_running:
+            return jsonify({
+                'success': False,
+                'error': 'Real-time monitor is not running. Start it first with POST /api/deposits/realtime/start',
+                'timestamp': datetime.now().isoformat()
+            }), 400
+        
+        # Wait for next deposit
+        deposit_event = realtime_notifier.get_next_deposit(timeout=timeout)
+        
+        if deposit_event:
+            return jsonify({
+                'success': True,
+                'deposit': {
+                    'wallet_address': deposit_event.wallet_address,
+                    'hash': deposit_event.hash,
+                    'timestamp': deposit_event.timestamp,
+                    'amount': deposit_event.amount,
+                    'detected_at': deposit_event.detected_at
+                },
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'deposit': None,
+                'message': f'No deposits detected within {timeout} seconds',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/deposits/realtime/stream')
+def stream_deposits():
+    """Server-Sent Events stream for real-time deposits - External API"""
+    def generate():
+        yield "data: {\"status\": \"connected\", \"message\": \"Real-time deposit stream started\"}\n\n"
+        
+        if not realtime_notifier.is_running:
+            yield "data: {\"error\": \"Real-time monitor is not running. Start it first.\"}\n\n"
+            return
+        
+        while realtime_notifier.is_running:
+            try:
+                # Wait for next deposit with timeout
+                deposit_event = realtime_notifier.get_next_deposit(timeout=10)
+                
+                if deposit_event:
+                    deposit_data = {
+                        'type': 'deposit',
+                        'data': {
+                            'wallet_address': deposit_event.wallet_address,
+                            'hash': deposit_event.hash,
+                            'timestamp': deposit_event.timestamp,
+                            'amount': deposit_event.amount,
+                            'detected_at': deposit_event.detected_at
+                        }
+                    }
+                    yield f"data: {json.dumps(deposit_data)}\n\n"
+                else:
+                    # Send heartbeat
+                    heartbeat = {
+                        'type': 'heartbeat',
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    yield f"data: {json.dumps(heartbeat)}\n\n"
+                    
+            except Exception as e:
+                error_data = {
+                    'type': 'error',
+                    'error': str(e),
+                    'timestamp': datetime.now().isoformat()
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                break
+    
+    return app.response_class(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Cache-Control'
+        }
+    )
+
+@app.route('/api/deposits/realtime/status')
+def get_realtime_status():
+    """Get real-time deposit monitor status - External API"""
+    try:
+        return jsonify({
+            'success': True,
+            'status': realtime_notifier.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/realtime/latest')
+def get_latest_realtime_deposits():
+    """Get latest real-time deposits from memory - For test website"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        limit = min(limit, 50)  # Cap at 50
+        
+        latest_deposits = realtime_notifier.get_latest_deposits(limit)
+        
+        deposits = []
+        for deposit in latest_deposits:
+            deposits.append({
+                'wallet_address': deposit.wallet_address,
+                'hash': deposit.hash,
+                'timestamp': deposit.timestamp,
+                'amount': deposit.amount,
+                'detected_at': deposit.detected_at
+            })
+        
+        return jsonify({
+            'success': True,
+            'count': len(deposits),
+            'deposits': deposits,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/realtime/start', methods=['POST'])
+def start_realtime_monitoring():
+    """Start real-time monitoring - For test website"""
+    try:
+        if realtime_notifier.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Real-time monitor is already running',
+                'status': realtime_notifier.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        realtime_notifier.start_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Real-time monitoring started',
+            'status': realtime_notifier.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/realtime/stop', methods=['POST'])
+def stop_realtime_monitoring():
+    """Stop real-time monitoring - For test website"""
+    try:
+        if not realtime_notifier.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Real-time monitor is not running',
+                'status': realtime_notifier.get_status(),
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        realtime_notifier.stop_monitoring()
+        return jsonify({
+            'success': True,
+            'message': 'Real-time monitoring stopped',
+            'status': realtime_notifier.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/status')
+def get_api_status():
+    """Get overall API status - For test website"""
+    try:
+        return jsonify({
+            'success': True,
+            'api_status': 'online',
+            'monitored_wallet': Config.MONITORED_WALLET,
+            'realtime_monitor': realtime_notifier.get_status(),
+            'deposit_monitor': deposit_monitor.get_status(),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/transactions/recent')
+def get_recent_transactions_simple():
+    """Get recent transactions in simple format - For test website"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        limit = min(limit, 100)  # Cap at 100
+        
+        # Get transactions from database
+        transactions = db.get_recent_transactions(limit)
+        
+        return jsonify({
+            'success': True,
+            'count': len(transactions),
+            'transactions': transactions,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/user-balance/<telegram_id>')
+def get_user_balance_by_id(telegram_id):
+    """Get user balance by telegram_id - For test website"""
+    try:
+        user_balance = db.get_user_balance(telegram_id)
+        
+        if user_balance:
+            return jsonify({
+                'success': True,
+                'telegram_id': telegram_id,
+                'wallet_address': user_balance.get('wallet_address'),
+                'balance': user_balance.get('balance', 0.0),
+                'created_at': user_balance.get('created_at'),
+                'updated_at': user_balance.get('updated_at'),
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'telegram_id': telegram_id,
+                'wallet_address': None,
+                'balance': 0.0,
+                'message': 'User not found, showing default balance',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/user-balances')
+def get_all_user_balances():
+    """Get all user balances - For test website"""
+    try:
+        user_balances = db.get_all_user_balances()
+        
+        return jsonify({
+            'success': True,
+            'count': len(user_balances),
+            'user_balances': user_balances,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 # ============================================================================
 # WEB DASHBOARD (Optional - for internal monitoring)
 # ============================================================================
 
 @app.route('/')
 def dashboard():
-    """Main dashboard interface"""
-    return UIComponents.render_dashboard()
+    """Main dashboard interface with real-time deposit monitoring"""
+    return render_template('dashboard.html', MONITORED_WALLET=Config.MONITORED_WALLET)
 
 @app.route('/example')
 def example():
     """Serve the frontend example page"""
-    with open('frontend_example.html', 'r', encoding='utf-8') as f:
-        return f.read()
-
-
-# Dashboard HTML template (simplified)
-DASHBOARD_HTML = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TON Wallet Monitor - API Backend</title>
-    <style>
-        ''' + UIComponents.get_base_styles() + '''
-        .api-endpoint {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-        }
-        .method {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 12px;
-        }
-        .get { background: #d4edda; color: #155724; }
-        .post { background: #d1ecf1; color: #0c5460; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>TON Wallet Monitor - API Backend</h1>
-            <div class="api-info">
-                <strong>✅ External API Ready</strong> - CORS enabled for cross-origin requests
-                <br>Monitoring: <code>''' + Config.MONITORED_WALLET + '''</code>
-            </div>
-            <div class="controls">
-                <button id="test-api-btn" class="btn btn-primary">🧪 Test API</button>
-                <button id="sync-btn" class="btn btn-success">🔄 Sync Now</button>
-            </div>
-        </div>
-        
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-value" id="wallet-balance">0.00</div>
-                <div class="stat-label">Balance (TON)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="total-transactions">0</div>
-                <div class="stat-label">Total Transactions</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="api-status">Ready</div>
-                <div class="stat-label">API Status</div>
-            </div>
-        </div>
-        
-        <div class="transactions">
-            <h2>Available API Endpoints</h2>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/health</strong>
-                <p>Health check and system status</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/transactions</strong>
-                <p>Get transactions with optional filters (limit, min_amount, max_amount, sender_address, from_date, to_date)</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/balance</strong>
-                <p>Get current wallet balance</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/stats</strong>
-                <p>Get transaction statistics</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method post">POST</span> <strong>/api/sync</strong>
-                <p>Manually sync transactions from blockchain</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/verify/transaction/&lt;tx_hash&gt;</strong>
-                <p>Verify a specific transaction by hash</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/verify/payment</strong>
-                <p>Verify payment by amount and timeframe (amount, sender, minutes_ago)</p>
-            </div>
-            
-            <div class="api-endpoint">
-                <span class="method get">GET</span> <strong>/api/wallet/info</strong>
-                <p>Get complete wallet information</p>
-            </div>
-        </div>
-    </div>
-    
-    <div id="notification" class="notification"></div>
-    
-    <script>
-        function showNotification(message) {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.style.display = 'block';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
-        }
-        
-        function loadStats() {
-            fetch('/api/stats')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('total-transactions').textContent = data.stats.total_transactions || 0;
-                        document.getElementById('api-status').textContent = 'Active';
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('api-status').textContent = 'Error';
-                    console.error('Error loading stats:', err);
-                });
-        }
-        
-        function loadBalance() {
-            fetch('/api/balance')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('wallet-balance').textContent = 
-                            (data.balance.balance_ton || 0).toFixed(2);
-                    }
-                })
-                .catch(err => {
-                    document.getElementById('wallet-balance').textContent = 'Error';
-                    console.error('Error loading balance:', err);
-                });
-        }
-        
-        document.getElementById('test-api-btn').addEventListener('click', function() {
-            showNotification('🧪 Testing API endpoints...');
-            fetch('/api/health')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'healthy') {
-                        showNotification('✅ API is working correctly');
-                        loadStats();
-                        loadBalance();
-                    } else {
-                        showNotification('❌ API health check failed');
-                    }
-                })
-                .catch(err => {
-                    showNotification('❌ API test failed');
-                    console.error('API test error:', err);
-                });
-        });
-        
-        document.getElementById('sync-btn').addEventListener('click', function() {
-            showNotification('🔄 Syncing transactions...');
-            fetch('/api/sync', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({limit: 10})
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification(`✅ ${data.message}`);
-                        loadStats();
-                    } else {
-                        showNotification('❌ Sync failed: ' + data.error);
-                    }
-                })
-                .catch(err => {
-                    showNotification('❌ Sync failed: Network error');
-                    console.error('Sync error:', err);
-                });
-        });
-        
-        // Initial load
-        loadStats();
-        loadBalance();
-        showNotification('🚀 TON Monitor API Backend Ready');
-    </script>
-</body>
-</html>
-'''
+    try:
+        with open('frontend_example.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return jsonify({'error': 'Frontend example not found'}), 404
 
 if __name__ == '__main__':
     # Validate configuration
@@ -508,6 +782,12 @@ if __name__ == '__main__':
     print(f"   - GET  /api/verify/transaction/<hash>")
     print(f"   - GET  /api/verify/payment")
     print(f"   - GET  /api/wallet/info")
+    print(f"   🔔 Real-time deposit endpoints:")
+    print(f"   - POST /api/deposits/realtime/start")
+    print(f"   - POST /api/deposits/realtime/stop")
+    print(f"   - GET  /api/deposits/realtime/next")
+    print(f"   - GET  /api/deposits/realtime/stream")
+    print(f"   - GET  /api/deposits/realtime/status")
     
     # Run the Flask app
     app.run(

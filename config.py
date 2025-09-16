@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     # TON Configuration
-    MONITORED_WALLET = os.getenv('MONITORED_WALLET', 'UQDrY5iulWs_MyWTP9JSGedWBzlbeRmhCBoqsSaNiSLOs315')
+    MONITORED_WALLET = os.getenv('MONITORED_WALLET', 'UQAOvLwrhnaqkW_e1Qu8oZc3XB4WT64r6DmVZEnIOx9QzhD-')
     
     # API Configuration (no keys required)
     API_TYPE = os.getenv('API_TYPE', 'toncenter')  # toncenter or tonapi
@@ -17,7 +17,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'ton-monitor-secret-2024')
     
     # Database Configuration
-    DATABASE_PATH = os.getenv('DATABASE_PATH', './transactions.db')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', './ton_monitor.db')
     
     # Transaction Filtering
     MIN_AMOUNT_TON = float(os.getenv('MIN_AMOUNT_TON', 0.01))

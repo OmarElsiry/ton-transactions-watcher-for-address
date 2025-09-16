@@ -41,6 +41,16 @@ class TransactionDB:
                 )
             ''')
             
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS user_balances (
+                    telegram_id TEXT PRIMARY KEY,
+                    wallet_address TEXT,
+                    balance REAL DEFAULT 0.0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             conn.execute('CREATE INDEX IF NOT EXISTS idx_tx_hash ON transactions(tx_hash)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_account_id ON transactions(account_id)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON transactions(timestamp)')
@@ -166,12 +176,65 @@ class TransactionDB:
     def get_stats(self):
         """Get transaction statistics"""
         with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
             cursor = conn.execute('''
                 SELECT 
                     COUNT(*) as total_transactions,
-                    SUM(amount_ton) as total_amount,
+                    COALESCE(SUM(amount_ton), 0) as total_amount,
                     COUNT(CASE WHEN processed = TRUE THEN 1 END) as processed_count,
                     COUNT(CASE WHEN confirmed = TRUE THEN 1 END) as confirmed_count
                 FROM transactions
             ''')
-            return dict(cursor.fetchone())
+            row = cursor.fetchone()
+            return dict(row) if row else {
+                'total_transactions': 0,
+                'total_amount': 0,
+                'processed_count': 0,
+                'confirmed_count': 0
+            }
+    
+    def get_user_balance(self, telegram_id):
+        """Get user balance by telegram_id"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('''
+                SELECT * FROM user_balances WHERE telegram_id = ?
+            ''', (telegram_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def create_or_update_user_balance(self, telegram_id, wallet_address=None, balance_change=0.0):
+        """Create or update user balance"""
+        with sqlite3.connect(self.db_path) as conn:
+            # Check if user exists
+            cursor = conn.execute('SELECT balance FROM user_balances WHERE telegram_id = ?', (telegram_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Update existing balance
+                new_balance = existing[0] + balance_change
+                conn.execute('''
+                    UPDATE user_balances 
+                    SET balance = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE telegram_id = ?
+                ''', (new_balance, telegram_id))
+            else:
+                # Create new user with default telegram_id if none provided
+                if not telegram_id or telegram_id == "0000000":
+                    telegram_id = "0000000"  # Default telegram_id as requested
+                
+                conn.execute('''
+                    INSERT INTO user_balances (telegram_id, wallet_address, balance)
+                    VALUES (?, ?, ?)
+                ''', (telegram_id, wallet_address, balance_change))
+            
+            return True
+    
+    def get_all_user_balances(self):
+        """Get all user balances"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('''
+                SELECT * FROM user_balances ORDER BY updated_at DESC
+            ''')
+            return [dict(row) for row in cursor.fetchall()]
